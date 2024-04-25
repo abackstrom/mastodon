@@ -26,13 +26,15 @@ module JsonLdHelper
   # The url attribute can be a string, an array of strings, or an array of objects.
   # The objects could include a mimeType. Not-included mimeType means it's text/html.
   def url_to_href(value, preferred_type = nil)
-    single_value = if value.is_a?(Array) && !value.first.is_a?(String)
-                     value.find { |link| preferred_type.nil? || ((link['mimeType'].presence || 'text/html') == preferred_type) }
-                   elsif value.is_a?(Array)
-                     value.first
-                   else
-                     value
-                   end
+    single_value = begin
+      if value.is_a?(Array) && !value.first.is_a?(String)
+        value.find { |link| preferred_type.nil? || ((link['mimeType'].presence || 'text/html') == preferred_type) }
+      elsif value.is_a?(Array)
+        value.first
+      else
+        value
+      end
+    end
 
     if single_value.nil? || single_value.is_a?(String)
       single_value
@@ -63,11 +65,11 @@ module JsonLdHelper
     uri.nil? || !uri.start_with?('http://', 'https://')
   end
 
-  def non_matching_uri_hosts?(base_url, comparison_url)
-    return true if unsupported_uri_scheme?(comparison_url)
+  def invalid_origin?(url)
+    return true if unsupported_uri_scheme?(url)
 
-    needle = Addressable::URI.parse(comparison_url).host
-    haystack = Addressable::URI.parse(base_url).host
+    needle   = Addressable::URI.parse(url).host
+    haystack = Addressable::URI.parse(@account.uri).host
 
     !haystack.casecmp(needle).zero?
   end
@@ -155,8 +157,8 @@ module JsonLdHelper
     end
   end
 
-  def fetch_resource(uri, id_is_known, on_behalf_of = nil, request_options: {})
-    unless id_is_known
+  def fetch_resource(uri, id, on_behalf_of = nil)
+    unless id
       json = fetch_resource_without_id_validation(uri, on_behalf_of)
 
       return if !json.is_a?(Hash) || unsupported_uri_scheme?(json['id'])
@@ -164,29 +166,17 @@ module JsonLdHelper
       uri = json['id']
     end
 
-    json = fetch_resource_without_id_validation(uri, on_behalf_of, request_options: request_options)
+    json = fetch_resource_without_id_validation(uri, on_behalf_of)
     json.present? && json['id'] == uri ? json : nil
   end
 
-  def fetch_resource_without_id_validation(uri, on_behalf_of = nil, raise_on_temporary_error = false, request_options: {})
+  def fetch_resource_without_id_validation(uri, on_behalf_of = nil, raise_on_temporary_error = false)
     on_behalf_of ||= Account.representative
 
-    build_request(uri, on_behalf_of, options: request_options).perform do |response|
+    build_request(uri, on_behalf_of).perform do |response|
       raise Mastodon::UnexpectedResponseError, response unless response_successful?(response) || response_error_unsalvageable?(response) || !raise_on_temporary_error
 
-      body_to_json(response.body_with_limit) if response.code == 200 && valid_activitypub_content_type?(response)
-    end
-  end
-
-  def valid_activitypub_content_type?(response)
-    return true if response.mime_type == 'application/activity+json'
-
-    # When the mime type is `application/ld+json`, we need to check the profile,
-    # but `http.rb` does not parse it for us.
-    return false unless response.mime_type == 'application/ld+json'
-
-    response.headers[HTTP::Headers::CONTENT_TYPE]&.split(';')&.map(&:strip)&.any? do |str|
-      str.start_with?('profile="') && str[9...-1].split.include?('https://www.w3.org/ns/activitystreams')
+      body_to_json(response.body_with_limit) if response.code == 200
     end
   end
 
@@ -216,14 +206,14 @@ module JsonLdHelper
     response.code == 501 || ((400...500).cover?(response.code) && ![401, 408, 429].include?(response.code))
   end
 
-  def build_request(uri, on_behalf_of = nil, options: {})
-    Request.new(:get, uri, **options).tap do |request|
+  def build_request(uri, on_behalf_of = nil)
+    Request.new(:get, uri).tap do |request|
       request.on_behalf_of(on_behalf_of) if on_behalf_of
       request.add_headers('Accept' => 'application/activity+json, application/ld+json')
     end
   end
 
-  def load_jsonld_context(url, _options = {}, &block)
+  def load_jsonld_context(url, _options = {}, &_block)
     json = Rails.cache.fetch("jsonld:context:#{url}", expires_in: 30.days, raw: true) do
       request = Request.new(:get, url)
       request.add_headers('Accept' => 'application/ld+json')
@@ -236,6 +226,6 @@ module JsonLdHelper
 
     doc = JSON::LD::API::RemoteDocument.new(json, documentUrl: url)
 
-    block ? yield(doc) : doc
+    block_given? ? yield(doc) : doc
   end
 end

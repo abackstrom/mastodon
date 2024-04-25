@@ -1,5 +1,4 @@
 # frozen_string_literal: true
-
 # == Schema Information
 #
 # Table name: account_domain_blocks
@@ -18,12 +17,16 @@ class AccountDomainBlock < ApplicationRecord
   belongs_to :account
   validates :domain, presence: true, uniqueness: { scope: :account_id }, domain: true
 
-  after_commit :invalidate_domain_blocking_cache
+  after_commit :remove_blocking_cache
+  after_commit :remove_relationship_cache
 
   private
 
-  def invalidate_domain_blocking_cache
+  def remove_blocking_cache
     Rails.cache.delete("exclude_domains_for:#{account_id}")
-    Rails.cache.delete(['exclude_domains', account_id, domain])
+  end
+
+  def remove_relationship_cache
+    Rails.cache.delete_matched("relationship:#{account_id}:*")
   end
 end

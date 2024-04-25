@@ -8,10 +8,7 @@ class BatchedRemoveStatusService < BaseService
   # @param [Hash] options
   # @option [Boolean] :skip_side_effects Do not modify feeds and send updates to streaming API
   def call(statuses, **options)
-    ActiveRecord::Associations::Preloader.new(
-      records: statuses,
-      associations: options[:skip_side_effects] ? :reblogs : [:account, :tags, reblogs: :account]
-    ).call
+    ActiveRecord::Associations::Preloader.new.preload(statuses, options[:skip_side_effects] ? :reblogs : [:account, :tags, reblogs: :account])
 
     statuses_and_reblogs = statuses.flat_map { |status| [status] + status.reblogs }
 
@@ -20,12 +17,11 @@ class BatchedRemoveStatusService < BaseService
     # rely on direct visibility statuses being relatively rare.
     statuses_with_account_conversations = statuses.select(&:direct_visibility?)
 
-    ActiveRecord::Associations::Preloader.new(
-      records: statuses_with_account_conversations,
-      associations: [mentions: :account]
-    ).call
+    ActiveRecord::Associations::Preloader.new.preload(statuses_with_account_conversations, [mentions: :account])
 
-    statuses_with_account_conversations.each(&:unlink_from_conversations!)
+    statuses_with_account_conversations.each do |status|
+      status.send(:unlink_from_conversations)
+    end
 
     # We do not batch all deletes into one to avoid having a long-running
     # transaction lock the database, but we use the delete method instead
@@ -35,10 +31,7 @@ class BatchedRemoveStatusService < BaseService
 
     # Since we skipped all callbacks, we also need to manually
     # deindex the statuses
-    if Chewy.enabled?
-      Chewy.strategy.current.update(StatusesIndex, statuses_and_reblogs)
-      Chewy.strategy.current.update(PublicStatusesIndex, statuses_and_reblogs)
-    end
+    Chewy.strategy.current.update(StatusesIndex, statuses_and_reblogs) if Chewy.enabled?
 
     return if options[:skip_side_effects]
 
@@ -54,9 +47,9 @@ class BatchedRemoveStatusService < BaseService
 
     # Cannot be batched
     @status_id_cutoff = Mastodon::Snowflake.id_at(2.weeks.ago)
-    redis.pipelined do |pipeline|
+    redis.pipelined do
       statuses.each do |status|
-        unpush_from_public_timelines(status, pipeline)
+        unpush_from_public_timelines(status)
       end
     end
   end
@@ -79,22 +72,22 @@ class BatchedRemoveStatusService < BaseService
     end
   end
 
-  def unpush_from_public_timelines(status, pipeline)
+  def unpush_from_public_timelines(status)
     return unless status.public_visibility? && status.id > @status_id_cutoff
 
     payload = Oj.dump(event: :delete, payload: status.id.to_s)
 
-    pipeline.publish('timeline:public', payload)
-    pipeline.publish(status.local? ? 'timeline:public:local' : 'timeline:public:remote', payload)
+    redis.publish('timeline:public', payload)
+    redis.publish(status.local? ? 'timeline:public:local' : 'timeline:public:remote', payload)
 
     if status.media_attachments.any?
-      pipeline.publish('timeline:public:media', payload)
-      pipeline.publish(status.local? ? 'timeline:public:local:media' : 'timeline:public:remote:media', payload)
+      redis.publish('timeline:public:media', payload)
+      redis.publish(status.local? ? 'timeline:public:local:media' : 'timeline:public:remote:media', payload)
     end
 
     status.tags.map { |tag| tag.name.mb_chars.downcase }.each do |hashtag|
-      pipeline.publish("timeline:hashtag:#{hashtag}", payload)
-      pipeline.publish("timeline:hashtag:#{hashtag}:local", payload) if status.local?
+      redis.publish("timeline:hashtag:#{hashtag}", payload)
+      redis.publish("timeline:hashtag:#{hashtag}:local", payload) if status.local?
     end
   end
 end

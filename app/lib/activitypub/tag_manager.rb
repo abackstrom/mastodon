@@ -26,7 +26,6 @@ class ActivityPub::TagManager
       target.instance_actor? ? about_more_url(instance_actor: true) : short_account_url(target)
     when :note, :comment, :activity
       return activity_account_status_url(target.account, target) if target.reblog?
-
       short_account_status_url(target.account, target)
     when :flag
       target.uri
@@ -41,7 +40,6 @@ class ActivityPub::TagManager
       target.instance_actor? ? instance_actor_url : account_url(target)
     when :note, :comment, :activity
       return activity_account_status_url(target.account, target) if target.reblog?
-
       account_status_url(target.account, target)
     when :emoji
       emoji_url(target)

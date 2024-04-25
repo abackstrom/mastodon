@@ -19,11 +19,6 @@ class Api::V1::ConversationsController < Api::BaseController
     render json: @conversation, serializer: REST::ConversationSerializer
   end
 
-  def unread
-    @conversation.update!(unread: true)
-    render json: @conversation, serializer: REST::ConversationSerializer
-  end
-
   def destroy
     @conversation.destroy!
     render_empty
@@ -58,11 +53,15 @@ class Api::V1::ConversationsController < Api::BaseController
   end
 
   def next_path
-    api_v1_conversations_url pagination_params(max_id: pagination_max_id) if records_continue?
+    if records_continue?
+      api_v1_conversations_url pagination_params(max_id: pagination_max_id)
+    end
   end
 
   def prev_path
-    api_v1_conversations_url pagination_params(min_id: pagination_since_id) unless @conversations.empty?
+    unless @conversations.empty?
+      api_v1_conversations_url pagination_params(min_id: pagination_since_id)
+    end
   end
 
   def pagination_max_id

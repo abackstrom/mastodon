@@ -1,5 +1,4 @@
 # frozen_string_literal: true
-
 # == Schema Information
 #
 # Table name: status_stats
@@ -16,6 +15,8 @@
 class StatusStat < ApplicationRecord
   belongs_to :status, inverse_of: :status_stat
 
+  after_commit :reset_parent_cache
+
   def replies_count
     [attributes['replies_count'], 0].max
   end
@@ -26,5 +27,11 @@ class StatusStat < ApplicationRecord
 
   def favourites_count
     [attributes['favourites_count'], 0].max
+  end
+
+  private
+
+  def reset_parent_cache
+    Rails.cache.delete("statuses/#{status_id}")
   end
 end

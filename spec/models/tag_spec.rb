@@ -1,23 +1,21 @@
-# frozen_string_literal: true
-
 require 'rails_helper'
 
-RSpec.describe Tag do
+RSpec.describe Tag, type: :model do
   describe 'validations' do
     it 'invalid with #' do
-      expect(described_class.new(name: '#hello_world')).to_not be_valid
+      expect(Tag.new(name: '#hello_world')).to_not be_valid
     end
 
     it 'invalid with .' do
-      expect(described_class.new(name: '.abcdef123')).to_not be_valid
+      expect(Tag.new(name: '.abcdef123')).to_not be_valid
     end
 
     it 'invalid with spaces' do
-      expect(described_class.new(name: 'hello world')).to_not be_valid
+      expect(Tag.new(name: 'hello world')).to_not be_valid
     end
 
     it 'valid with ａｅｓｔｈｅｔｉｃ' do
-      expect(described_class.new(name: 'ａｅｓｔｈｅｔｉｃ')).to be_valid
+      expect(Tag.new(name: 'ａｅｓｔｈｅｔｉｃ')).to be_valid
     end
   end
 
@@ -32,52 +30,40 @@ RSpec.describe Tag do
       expect(subject.match('https://en.wikipedia.org/wiki/Ghostbusters_(song)#Lawsuit')).to be_nil
     end
 
-    it 'does not match URLs with hashtag-like anchors after a numeral' do
-      expect(subject.match('https://gcc.gnu.org/bugzilla/show_bug.cgi?id=111895#c4')).to be_nil
-    end
-
-    it 'does not match URLs with hashtag-like anchors after an empty query parameter' do
-      expect(subject.match('https://en.wikipedia.org/wiki/Ghostbusters_(song)?foo=#Lawsuit')).to be_nil
-    end
-
     it 'matches ﻿#ａｅｓｔｈｅｔｉｃ' do
-      expect(subject.match('﻿this is #ａｅｓｔｈｅｔｉｃ').to_s).to eq '#ａｅｓｔｈｅｔｉｃ'
+      expect(subject.match('﻿this is #ａｅｓｔｈｅｔｉｃ').to_s).to eq ' #ａｅｓｔｈｅｔｉｃ'
     end
 
     it 'matches digits at the start' do
-      expect(subject.match('hello #3d').to_s).to eq '#3d'
+      expect(subject.match('hello #3d').to_s).to eq ' #3d'
     end
 
     it 'matches digits in the middle' do
-      expect(subject.match('hello #l33ts35k').to_s).to eq '#l33ts35k'
+      expect(subject.match('hello #l33ts35k').to_s).to eq ' #l33ts35k'
     end
 
     it 'matches digits at the end' do
-      expect(subject.match('hello #world2016').to_s).to eq '#world2016'
+      expect(subject.match('hello #world2016').to_s).to eq ' #world2016'
     end
 
     it 'matches underscores at the beginning' do
-      expect(subject.match('hello #_test').to_s).to eq '#_test'
+      expect(subject.match('hello #_test').to_s).to eq ' #_test'
     end
 
     it 'matches underscores at the end' do
-      expect(subject.match('hello #test_').to_s).to eq '#test_'
+      expect(subject.match('hello #test_').to_s).to eq ' #test_'
     end
 
     it 'matches underscores in the middle' do
-      expect(subject.match('hello #one_two_three').to_s).to eq '#one_two_three'
+      expect(subject.match('hello #one_two_three').to_s).to eq ' #one_two_three'
     end
 
     it 'matches middle dots' do
-      expect(subject.match('hello #one·two·three').to_s).to eq '#one·two·three'
-    end
-
-    it 'matches ・unicode in ぼっち・ざ・ろっく correctly' do
-      expect(subject.match('testing #ぼっち・ざ・ろっく').to_s).to eq '#ぼっち・ざ・ろっく'
+      expect(subject.match('hello #one·two·three').to_s).to eq ' #one·two·three'
     end
 
     it 'matches ZWNJ' do
-      expect(subject.match('just add #نرم‌افزار and').to_s).to eq '#نرم‌افزار'
+      expect(subject.match('just add #نرم‌افزار and').to_s).to eq ' #نرم‌افزار'
     end
 
     it 'does not match middle dots at the start' do
@@ -85,7 +71,7 @@ RSpec.describe Tag do
     end
 
     it 'does not match middle dots at the end' do
-      expect(subject.match('hello #one·two·three·').to_s).to eq '#one·two·three'
+      expect(subject.match('hello #one·two·three·').to_s).to eq ' #one·two·three'
     end
 
     it 'does not match purely-numeric hashtags' do
@@ -103,46 +89,44 @@ RSpec.describe Tag do
   describe '.find_normalized' do
     it 'returns tag for a multibyte case-insensitive name' do
       upcase_string   = 'abcABCａｂｃＡＢＣやゆよ'
-      downcase_string = 'abcabcａｂｃａｂｃやゆよ'
+      downcase_string = 'abcabcａｂｃａｂｃやゆよ';
 
       tag = Fabricate(:tag, name: HashtagNormalizer.new.normalize(downcase_string))
-      expect(described_class.find_normalized(upcase_string)).to eq tag
+      expect(Tag.find_normalized(upcase_string)).to eq tag
     end
   end
 
   describe '.matches_name' do
     it 'returns tags for multibyte case-insensitive names' do
       upcase_string   = 'abcABCａｂｃＡＢＣやゆよ'
-      downcase_string = 'abcabcａｂｃａｂｃやゆよ'
+      downcase_string = 'abcabcａｂｃａｂｃやゆよ';
 
       tag = Fabricate(:tag, name: HashtagNormalizer.new.normalize(downcase_string))
-      expect(described_class.matches_name(upcase_string)).to eq [tag]
+      expect(Tag.matches_name(upcase_string)).to eq [tag]
     end
 
     it 'uses the LIKE operator' do
-      result = %q[SELECT "tags".* FROM "tags" WHERE LOWER("tags"."name") LIKE LOWER('100abc%')]
-      expect(described_class.matches_name('100%abc').to_sql).to eq result
+      expect(Tag.matches_name('100%abc').to_sql).to eq %q[SELECT "tags".* FROM "tags" WHERE LOWER("tags"."name") LIKE LOWER('100abc%')]
     end
   end
 
   describe '.matching_name' do
     it 'returns tags for multibyte case-insensitive names' do
       upcase_string   = 'abcABCａｂｃＡＢＣやゆよ'
-      downcase_string = 'abcabcａｂｃａｂｃやゆよ'
+      downcase_string = 'abcabcａｂｃａｂｃやゆよ';
 
       tag = Fabricate(:tag, name: HashtagNormalizer.new.normalize(downcase_string))
-      expect(described_class.matching_name(upcase_string)).to eq [tag]
+      expect(Tag.matching_name(upcase_string)).to eq [tag]
     end
   end
 
   describe '.find_or_create_by_names' do
-    let(:upcase_string) { 'abcABCａｂｃＡＢＣやゆよ' }
-    let(:downcase_string) { 'abcabcａｂｃａｂｃやゆよ' }
-
     it 'runs a passed block once per tag regardless of duplicates' do
-      count = 0
+      upcase_string   = 'abcABCａｂｃＡＢＣやゆよ'
+      downcase_string = 'abcabcａｂｃａｂｃやゆよ';
+      count           = 0
 
-      described_class.find_or_create_by_names([upcase_string, downcase_string]) do |_tag|
+      Tag.find_or_create_by_names([upcase_string, downcase_string]) do |tag|
         count += 1
       end
 
@@ -152,28 +136,28 @@ RSpec.describe Tag do
 
   describe '.search_for' do
     it 'finds tag records with matching names' do
-      tag = Fabricate(:tag, name: 'match')
-      _miss_tag = Fabricate(:tag, name: 'miss')
+      tag = Fabricate(:tag, name: "match")
+      _miss_tag = Fabricate(:tag, name: "miss")
 
-      results = described_class.search_for('match')
+      results = Tag.search_for("match")
 
       expect(results).to eq [tag]
     end
 
     it 'finds tag records in case insensitive' do
-      tag = Fabricate(:tag, name: 'MATCH')
-      _miss_tag = Fabricate(:tag, name: 'miss')
+      tag = Fabricate(:tag, name: "MATCH")
+      _miss_tag = Fabricate(:tag, name: "miss")
 
-      results = described_class.search_for('match')
+      results = Tag.search_for("match")
 
       expect(results).to eq [tag]
     end
 
     it 'finds the exact matching tag as the first item' do
-      similar_tag = Fabricate(:tag, name: 'matchlater', reviewed_at: Time.now.utc)
-      tag = Fabricate(:tag, name: 'match', reviewed_at: Time.now.utc)
+      similar_tag = Fabricate(:tag, name: "matchlater", reviewed_at: Time.now.utc)
+      tag = Fabricate(:tag, name: "match", reviewed_at: Time.now.utc)
 
-      results = described_class.search_for('match')
+      results = Tag.search_for("match")
 
       expect(results).to eq [tag, similar_tag]
     end

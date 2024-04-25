@@ -28,14 +28,10 @@ class DomainAllow < ApplicationRecord
       !rule_for(domain).nil?
     end
 
-    def allowed_domains
-      select(:domain)
-    end
-
     def rule_for(domain)
       return if domain.blank?
 
-      uri = Addressable::URI.new.tap { |u| u.host = domain.delete('/') }
+      uri = Addressable::URI.new.tap { |u| u.host = domain.gsub(/[\/]/, '') }
 
       find_by(domain: uri.normalized_host)
     end

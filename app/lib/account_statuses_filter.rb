@@ -32,10 +32,10 @@ class AccountStatusesFilter
   private
 
   def initial_scope
-    return Status.none if suspended?
-
-    if anonymous?
-      account.statuses.where(visibility: %i(public unlisted))
+    if suspended?
+      Status.none
+    elsif anonymous?
+      account.statuses.where(visibility: %i(public unlisted)).without_local_only
     elsif author?
       account.statuses.all # NOTE: #merge! does not work without the #all
     elsif blocked?
@@ -55,18 +55,7 @@ class AccountStatusesFilter
   end
 
   def filtered_reblogs_scope
-    scope = Status.left_outer_joins(reblog: :account)
-    scope
-      .where(reblog_of_id: nil)
-      .or(
-        scope
-          # This is basically `Status.not_domain_blocked_by_account(current_account)`
-          # and `Status.not_excluded_by_account(current_account)` but on the
-          # `reblog` association. Unfortunately, there seem to be no clean way
-          # to re-use those scopes in our case.
-          .where(reblog: { accounts: { domain: nil } }).or(scope.where.not(reblog: { accounts: { domain: current_account.excluded_from_timeline_domains } }))
-          .where.not(reblog: { account_id: current_account.excluded_from_timeline_account_ids })
-      )
+    Status.left_outer_joins(:reblog).where(reblog_of_id: nil).or(Status.where.not(reblogs_statuses: { account_id: current_account.excluded_from_timeline_account_ids }))
   end
 
   def only_media_scope

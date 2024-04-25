@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require 'devise/strategies/authenticatable'
 
 Warden::Manager.after_set_user except: :fetch do |user, warden|
@@ -161,7 +159,7 @@ Devise.setup do |config|
   # config.request_keys = []
 
   # Configure which authentication keys should be case-insensitive.
-  # These keys will be lowercased upon creating or modifying a user and when used
+  # These keys will be downcased upon creating or modifying a user and when used
   # to authenticate or find a user. Default is :email.
   config.case_insensitive_keys = [:email]
 

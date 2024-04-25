@@ -1,12 +1,10 @@
-import { defineMessages } from 'react-intl';
-
 import axios from 'axios';
 import { throttle } from 'lodash';
-
+import { defineMessages } from 'react-intl';
 import api from 'mastodon/api';
 import { search as emojiSearch } from 'mastodon/features/emoji/emoji_mart_search_light';
 import { tagHistory } from 'mastodon/settings';
-
+import resizeImage from 'mastodon/utils/resize_image';
 import { showAlert, showAlertForError } from './alerts';
 import { useEmoji } from './emojis';
 import { importFetchedAccounts, importFetchedStatus } from './importer';
@@ -78,14 +76,10 @@ export const COMPOSE_CHANGE_MEDIA_DESCRIPTION = 'COMPOSE_CHANGE_MEDIA_DESCRIPTIO
 export const COMPOSE_CHANGE_MEDIA_FOCUS       = 'COMPOSE_CHANGE_MEDIA_FOCUS';
 
 export const COMPOSE_SET_STATUS = 'COMPOSE_SET_STATUS';
-export const COMPOSE_FOCUS = 'COMPOSE_FOCUS';
 
 const messages = defineMessages({
   uploadErrorLimit: { id: 'upload_error.limit', defaultMessage: 'File upload limit exceeded.' },
   uploadErrorPoll:  { id: 'upload_error.poll', defaultMessage: 'File upload not allowed with polls.' },
-  open: { id: 'compose.published.open', defaultMessage: 'Open' },
-  published: { id: 'compose.published.body', defaultMessage: 'Post published.' },
-  saved: { id: 'compose.saved.body', defaultMessage: 'Post saved.' },
 });
 
 export const ensureComposeIsVisible = (getState, routerHistory) => {
@@ -101,14 +95,14 @@ export function setComposeToStatus(status, text, spoiler_text) {
     text,
     spoiler_text,
   };
-}
+};
 
 export function changeCompose(text) {
   return {
     type: COMPOSE_CHANGE,
     text: text,
   };
-}
+};
 
 export function replyCompose(status, routerHistory) {
   return (dispatch, getState) => {
@@ -119,27 +113,18 @@ export function replyCompose(status, routerHistory) {
 
     ensureComposeIsVisible(getState, routerHistory);
   };
-}
+};
 
 export function cancelReplyCompose() {
   return {
     type: COMPOSE_REPLY_CANCEL,
   };
-}
+};
 
 export function resetCompose() {
   return {
     type: COMPOSE_RESET,
   };
-}
-
-export const focusCompose = (routerHistory, defaultText) => (dispatch, getState) => {
-  dispatch({
-    type: COMPOSE_FOCUS,
-    defaultText,
-  });
-
-  ensureComposeIsVisible(getState, routerHistory);
 };
 
 export function mentionCompose(account, routerHistory) {
@@ -151,7 +136,7 @@ export function mentionCompose(account, routerHistory) {
 
     ensureComposeIsVisible(getState, routerHistory);
   };
-}
+};
 
 export function directCompose(account, routerHistory) {
   return (dispatch, getState) => {
@@ -162,7 +147,7 @@ export function directCompose(account, routerHistory) {
 
     ensureComposeIsVisible(getState, routerHistory);
   };
-}
+};
 
 export function submitCompose(routerHistory) {
   return function (dispatch, getState) {
@@ -176,26 +161,6 @@ export function submitCompose(routerHistory) {
 
     dispatch(submitComposeRequest());
 
-    // If we're editing a post with media attachments, those have not
-    // necessarily been changed on the server. Do it now in the same
-    // API call.
-    let media_attributes;
-    if (statusId !== null) {
-      media_attributes = media.map(item => {
-        let focus;
-
-        if (item.getIn(['meta', 'focus'])) {
-          focus = `${item.getIn(['meta', 'focus', 'x']).toFixed(2)},${item.getIn(['meta', 'focus', 'y']).toFixed(2)}`;
-        }
-
-        return {
-          id: item.get('id'),
-          description: item.get('description'),
-          focus,
-        };
-      });
-    }
-
     api(getState).request({
       url: statusId === null ? '/api/v1/statuses' : `/api/v1/statuses/${statusId}`,
       method: statusId === null ? 'post' : 'put',
@@ -203,7 +168,6 @@ export function submitCompose(routerHistory) {
         status,
         in_reply_to_id: getState().getIn(['compose', 'in_reply_to'], null),
         media_ids: media.map(item => item.get('id')),
-        media_attributes,
         sensitive: getState().getIn(['compose', 'sensitive']),
         spoiler_text: getState().getIn(['compose', 'spoiler']) ? getState().getIn(['compose', 'spoiler_text'], '') : '',
         visibility: getState().getIn(['compose', 'privacy']),
@@ -245,100 +209,96 @@ export function submitCompose(routerHistory) {
         insertIfOnline('public');
         insertIfOnline(`account:${response.data.account.id}`);
       }
-
-      dispatch(showAlert({
-        message: statusId === null ? messages.published : messages.saved,
-        action: messages.open,
-        dismissAfter: 10000,
-        onClick: () => routerHistory.push(`/@${response.data.account.username}/${response.data.id}`),
-      }));
     }).catch(function (error) {
       dispatch(submitComposeFail(error));
     });
   };
-}
+};
 
 export function submitComposeRequest() {
   return {
     type: COMPOSE_SUBMIT_REQUEST,
   };
-}
+};
 
 export function submitComposeSuccess(status) {
   return {
     type: COMPOSE_SUBMIT_SUCCESS,
     status: status,
   };
-}
+};
 
 export function submitComposeFail(error) {
   return {
     type: COMPOSE_SUBMIT_FAIL,
     error: error,
   };
-}
+};
 
 export function uploadCompose(files) {
   return function (dispatch, getState) {
     const uploadLimit = 4;
-    const media = getState().getIn(['compose', 'media_attachments']);
-    const pending = getState().getIn(['compose', 'pending_media_attachments']);
+    const media  = getState().getIn(['compose', 'media_attachments']);
+    const pending  = getState().getIn(['compose', 'pending_media_attachments']);
     const progress = new Array(files.length).fill(0);
-
     let total = Array.from(files).reduce((a, v) => a + v.size, 0);
 
     if (files.length + media.size + pending > uploadLimit) {
-      dispatch(showAlert({ message: messages.uploadErrorLimit }));
+      dispatch(showAlert(undefined, messages.uploadErrorLimit));
       return;
     }
 
     if (getState().getIn(['compose', 'poll'])) {
-      dispatch(showAlert({ message: messages.uploadErrorPoll }));
+      dispatch(showAlert(undefined, messages.uploadErrorPoll));
       return;
     }
 
     dispatch(uploadComposeRequest());
 
-    for (const [i, file] of Array.from(files).entries()) {
+    for (const [i, f] of Array.from(files).entries()) {
       if (media.size + i > 3) break;
 
-      const data = new FormData();
-      data.append('file', file);
+      resizeImage(f).then(file => {
+        const data = new FormData();
+        data.append('file', file);
+        // Account for disparity in size of original image and resized data
+        total += file.size - f.size;
 
-      api(getState).post('/api/v2/media', data, {
-        onUploadProgress: function({ loaded }){
-          progress[i] = loaded;
-          dispatch(uploadComposeProgress(progress.reduce((a, v) => a + v, 0), total));
-        },
-      }).then(({ status, data }) => {
-        // If server-side processing of the media attachment has not completed yet,
-        // poll the server until it is, before showing the media attachment as uploaded
+        return api(getState).post('/api/v2/media', data, {
+          onUploadProgress: function({ loaded }){
+            progress[i] = loaded;
+            dispatch(uploadComposeProgress(progress.reduce((a, v) => a + v, 0), total));
+          },
+        }).then(({ status, data }) => {
+          // If server-side processing of the media attachment has not completed yet,
+          // poll the server until it is, before showing the media attachment as uploaded
 
-        if (status === 200) {
-          dispatch(uploadComposeSuccess(data, file));
-        } else if (status === 202) {
-          dispatch(uploadComposeProcessing());
+          if (status === 200) {
+            dispatch(uploadComposeSuccess(data, f));
+          } else if (status === 202) {
+            dispatch(uploadComposeProcessing());
 
-          let tryCount = 1;
+            let tryCount = 1;
 
-          const poll = () => {
-            api(getState).get(`/api/v1/media/${data.id}`).then(response => {
-              if (response.status === 200) {
-                dispatch(uploadComposeSuccess(response.data, file));
-              } else if (response.status === 206) {
-                const retryAfter = (Math.log2(tryCount) || 1) * 1000;
-                tryCount += 1;
-                setTimeout(() => poll(), retryAfter);
-              }
-            }).catch(error => dispatch(uploadComposeFail(error)));
-          };
+            const poll = () => {
+              api(getState).get(`/api/v1/media/${data.id}`).then(response => {
+                if (response.status === 200) {
+                  dispatch(uploadComposeSuccess(response.data, f));
+                } else if (response.status === 206) {
+                  const retryAfter = (Math.log2(tryCount) || 1) * 1000;
+                  tryCount += 1;
+                  setTimeout(() => poll(), retryAfter);
+                }
+              }).catch(error => dispatch(uploadComposeFail(error)));
+            };
 
-          poll();
-        }
+            poll();
+          }
+        });
       }).catch(error => dispatch(uploadComposeFail(error)));
-    }
+    };
   };
-}
+};
 
 export const uploadComposeProcessing = () => ({
   type: COMPOSE_UPLOAD_PROCESSING,
@@ -394,19 +354,16 @@ export function initMediaEditModal(id) {
       id,
     });
 
-    dispatch(openModal({
-      modalType: 'FOCAL_POINT',
-      modalProps: { id },
-    }));
+    dispatch(openModal('FOCAL_POINT', { id }));
   };
-}
+};
 
 export function onChangeMediaDescription(description) {
   return {
     type: COMPOSE_CHANGE_MEDIA_DESCRIPTION,
     description,
   };
-}
+};
 
 export function onChangeMediaFocus(focusX, focusY) {
   return {
@@ -414,51 +371,34 @@ export function onChangeMediaFocus(focusX, focusY) {
     focusX,
     focusY,
   };
-}
+};
 
 export function changeUploadCompose(id, params) {
   return (dispatch, getState) => {
     dispatch(changeUploadComposeRequest());
 
-    let media = getState().getIn(['compose', 'media_attachments']).find((item) => item.get('id') === id);
-
-    // Editing already-attached media is deferred to editing the post itself.
-    // For simplicity's sake, fake an API reply.
-    if (media && !media.get('unattached')) {
-      const { focus, ...other } = params;
-      const data = { ...media.toJS(), ...other };
-
-      if (focus) {
-        const [x, y] = focus.split(',');
-        data.meta = { focus: { x: parseFloat(x), y: parseFloat(y) } };
-      }
-
-      dispatch(changeUploadComposeSuccess(data, true));
-    } else {
-      api(getState).put(`/api/v1/media/${id}`, params).then(response => {
-        dispatch(changeUploadComposeSuccess(response.data, false));
-      }).catch(error => {
-        dispatch(changeUploadComposeFail(id, error));
-      });
-    }
+    api(getState).put(`/api/v1/media/${id}`, params).then(response => {
+      dispatch(changeUploadComposeSuccess(response.data));
+    }).catch(error => {
+      dispatch(changeUploadComposeFail(id, error));
+    });
   };
-}
+};
 
 export function changeUploadComposeRequest() {
   return {
     type: COMPOSE_UPLOAD_CHANGE_REQUEST,
     skipLoading: true,
   };
-}
+};
 
-export function changeUploadComposeSuccess(media, attached) {
+export function changeUploadComposeSuccess(media) {
   return {
     type: COMPOSE_UPLOAD_CHANGE_SUCCESS,
     media: media,
-    attached: attached,
     skipLoading: true,
   };
-}
+};
 
 export function changeUploadComposeFail(error) {
   return {
@@ -466,14 +406,14 @@ export function changeUploadComposeFail(error) {
     error: error,
     skipLoading: true,
   };
-}
+};
 
 export function uploadComposeRequest() {
   return {
     type: COMPOSE_UPLOAD_REQUEST,
     skipLoading: true,
   };
-}
+};
 
 export function uploadComposeProgress(loaded, total) {
   return {
@@ -481,7 +421,7 @@ export function uploadComposeProgress(loaded, total) {
     loaded: loaded,
     total: total,
   };
-}
+};
 
 export function uploadComposeSuccess(media, file) {
   return {
@@ -490,7 +430,7 @@ export function uploadComposeSuccess(media, file) {
     file: file,
     skipLoading: true,
   };
-}
+};
 
 export function uploadComposeFail(error) {
   return {
@@ -498,14 +438,14 @@ export function uploadComposeFail(error) {
     error: error,
     skipLoading: true,
   };
-}
+};
 
 export function undoUploadCompose(media_id) {
   return {
     type: COMPOSE_UPLOAD_UNDO,
     media_id: media_id,
   };
-}
+};
 
 export function clearComposeSuggestions() {
   if (fetchComposeSuggestionsAccountsController) {
@@ -514,7 +454,7 @@ export function clearComposeSuggestions() {
   return {
     type: COMPOSE_SUGGESTIONS_CLEAR,
   };
-}
+};
 
 const fetchComposeSuggestionsAccounts = throttle((dispatch, getState, token) => {
   if (fetchComposeSuggestionsAccountsController) {
@@ -592,7 +532,7 @@ export function fetchComposeSuggestions(token) {
       break;
     }
   };
-}
+};
 
 export function readyComposeSuggestionsEmojis(token, emojis) {
   return {
@@ -600,7 +540,7 @@ export function readyComposeSuggestionsEmojis(token, emojis) {
     token,
     emojis,
   };
-}
+};
 
 export function readyComposeSuggestionsAccounts(token, accounts) {
   return {
@@ -608,7 +548,7 @@ export function readyComposeSuggestionsAccounts(token, accounts) {
     token,
     accounts,
   };
-}
+};
 
 export const readyComposeSuggestionsTags = (token, tags) => ({
   type: COMPOSE_SUGGESTIONS_READY,
@@ -653,7 +593,7 @@ export function selectComposeSuggestion(position, token, suggestion, path) {
       });
     }
   };
-}
+};
 
 export function updateSuggestionTags(token) {
   return {
@@ -714,19 +654,19 @@ export function mountCompose() {
   return {
     type: COMPOSE_MOUNT,
   };
-}
+};
 
 export function unmountCompose() {
   return {
     type: COMPOSE_UNMOUNT,
   };
-}
+};
 
 export function changeComposeSensitivity() {
   return {
     type: COMPOSE_SENSITIVITY_CHANGE,
   };
-}
+};
 
 export const changeComposeLanguage = language => ({
   type: COMPOSE_LANGUAGE_CHANGE,
@@ -737,21 +677,21 @@ export function changeComposeSpoilerness() {
   return {
     type: COMPOSE_SPOILERNESS_CHANGE,
   };
-}
+};
 
 export function changeComposeSpoilerText(text) {
   return {
     type: COMPOSE_SPOILER_TEXT_CHANGE,
     text,
   };
-}
+};
 
 export function changeComposeVisibility(value) {
   return {
     type: COMPOSE_VISIBILITY_CHANGE,
     value,
   };
-}
+};
 
 export function changeComposeFederation(value) {
   return {
@@ -767,33 +707,33 @@ export function insertEmojiCompose(position, emoji, needsSpace) {
     emoji,
     needsSpace,
   };
-}
+};
 
 export function changeComposing(value) {
   return {
     type: COMPOSE_COMPOSING_CHANGE,
     value,
   };
-}
+};
 
 export function addPoll() {
   return {
     type: COMPOSE_POLL_ADD,
   };
-}
+};
 
 export function removePoll() {
   return {
     type: COMPOSE_POLL_REMOVE,
   };
-}
+};
 
 export function addPollOption(title) {
   return {
     type: COMPOSE_POLL_OPTION_ADD,
     title,
   };
-}
+};
 
 export function changePollOption(index, title) {
   return {
@@ -801,14 +741,14 @@ export function changePollOption(index, title) {
     index,
     title,
   };
-}
+};
 
 export function removePollOption(index) {
   return {
     type: COMPOSE_POLL_OPTION_REMOVE,
     index,
   };
-}
+};
 
 export function changePollSettings(expiresIn, isMultiple) {
   return {
@@ -816,4 +756,4 @@ export function changePollSettings(expiresIn, isMultiple) {
     expiresIn,
     isMultiple,
   };
-}
+};

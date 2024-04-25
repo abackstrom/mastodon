@@ -1,16 +1,13 @@
-# frozen_string_literal: true
-
 require 'rails_helper'
 
 RSpec.describe FetchResourceService, type: :service do
   describe '#call' do
-    subject { described_class.new.call(url) }
-
     let(:url) { 'http://example.com' }
+
+    subject { described_class.new.call(url) }
 
     context 'with blank url' do
       let(:url) { '' }
-
       it { is_expected.to be_nil }
     end
 
@@ -24,7 +21,7 @@ RSpec.describe FetchResourceService, type: :service do
 
     context 'when OpenSSL::SSL::SSLError is raised' do
       before do
-        request = instance_double(Request)
+        request = double()
         allow(Request).to receive(:new).and_return(request)
         allow(request).to receive(:add_headers)
         allow(request).to receive(:on_behalf_of)
@@ -36,7 +33,7 @@ RSpec.describe FetchResourceService, type: :service do
 
     context 'when HTTP::ConnectionError is raised' do
       before do
-        request = instance_double(Request)
+        request = double()
         allow(Request).to receive(:new).and_return(request)
         allow(request).to receive(:add_headers)
         allow(request).to receive(:on_behalf_of)
@@ -57,7 +54,7 @@ RSpec.describe FetchResourceService, type: :service do
 
       let(:json) do
         {
-          id: 'http://example.com/foo',
+          id: 1,
           '@context': ActivityPub::TagManager::CONTEXT,
           type: 'Note',
         }.to_json
@@ -65,7 +62,6 @@ RSpec.describe FetchResourceService, type: :service do
 
       before do
         stub_request(:get, url).to_return(status: 200, body: body, headers: headers)
-        stub_request(:get, 'http://example.com/foo').to_return(status: 200, body: json, headers: { 'Content-Type' => 'application/activity+json' })
       end
 
       it 'signs request' do
@@ -76,34 +72,39 @@ RSpec.describe FetchResourceService, type: :service do
       context 'when content type is application/atom+xml' do
         let(:content_type) { 'application/atom+xml' }
 
-        it { is_expected.to be_nil }
+        it { is_expected.to eq nil }
       end
 
       context 'when content type is activity+json' do
         let(:content_type) { 'application/activity+json; charset=utf-8' }
         let(:body) { json }
 
-        it { is_expected.to eq ['http://example.com/foo', { prefetched_body: body }] }
+        it { is_expected.to eq [1, { prefetched_body: body, id: true }] }
       end
 
       context 'when content type is ld+json with profile' do
         let(:content_type) { 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"' }
         let(:body) { json }
 
-        it { is_expected.to eq ['http://example.com/foo', { prefetched_body: body }] }
+        it { is_expected.to eq [1, { prefetched_body: body, id: true }] }
+      end
+
+      before do
+        stub_request(:get, url).to_return(status: 200, body: body, headers: headers)
+        stub_request(:get, 'http://example.com/foo').to_return(status: 200, body: json, headers: { 'Content-Type' => 'application/activity+json' })
       end
 
       context 'when link header is present' do
-        let(:headers) { { 'Link' => '<http://example.com/foo>; rel="alternate"; type="application/activity+json"' } }
+        let(:headers) { { 'Link' => '<http://example.com/foo>; rel="alternate"; type="application/activity+json"', } }
 
-        it { is_expected.to eq ['http://example.com/foo', { prefetched_body: json }] }
+        it { is_expected.to eq [1, { prefetched_body: json, id: true }] }
       end
 
       context 'when content type is text/html' do
         let(:content_type) { 'text/html' }
         let(:body) { '<html><head><link rel="alternate" href="http://example.com/foo" type="application/activity+json"/></head></html>' }
 
-        it { is_expected.to eq ['http://example.com/foo', { prefetched_body: json }] }
+        it { is_expected.to eq [1, { prefetched_body: json, id: true }] }
       end
     end
   end

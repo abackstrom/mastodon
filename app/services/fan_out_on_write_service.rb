@@ -8,7 +8,6 @@ class FanOutOnWriteService < BaseService
   # @param [Hash] options
   # @option options [Boolean] update
   # @option options [Array<Integer>] silenced_account_ids
-  # @option options [Boolean] skip_notifications
   def call(status, options = {})
     @status    = status
     @account   = status.account
@@ -38,11 +37,8 @@ class FanOutOnWriteService < BaseService
 
   def fan_out_to_local_recipients!
     deliver_to_self!
-
-    unless @options[:skip_notifications]
-      notify_mentioned_accounts!
-      notify_about_update! if update?
-    end
+    notify_mentioned_accounts!
+    notify_about_update! if update?
 
     case @status.visibility.to_sym
     when :public, :unlisted, :private

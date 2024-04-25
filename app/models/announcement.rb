@@ -20,7 +20,7 @@
 class Announcement < ApplicationRecord
   scope :unpublished, -> { where(published: false) }
   scope :published, -> { where(published: true) }
-  scope :without_muted, ->(account) { joins("LEFT OUTER JOIN announcement_mutes ON announcement_mutes.announcement_id = announcements.id AND announcement_mutes.account_id = #{account.id}").where(announcement_mutes: { id: nil }) }
+  scope :without_muted, ->(account) { joins("LEFT OUTER JOIN announcement_mutes ON announcement_mutes.announcement_id = announcements.id AND announcement_mutes.account_id = #{account.id}").where('announcement_mutes.id IS NULL') }
   scope :chronological, -> { order(Arel.sql('COALESCE(announcements.starts_at, announcements.scheduled_at, announcements.published_at, announcements.created_at) ASC')) }
   scope :reverse_chronological, -> { order(Arel.sql('COALESCE(announcements.starts_at, announcements.scheduled_at, announcements.published_at, announcements.created_at) DESC')) }
 
@@ -54,11 +54,13 @@ class Announcement < ApplicationRecord
   end
 
   def statuses
-    @statuses ||= if status_ids.nil?
-                    []
-                  else
-                    Status.where(id: status_ids, visibility: [:public, :unlisted])
-                  end
+    @statuses ||= begin
+      if status_ids.nil?
+        []
+      else
+        Status.where(id: status_ids, visibility: [:public, :unlisted])
+      end
+    end
   end
 
   def tags
@@ -78,9 +80,9 @@ class Announcement < ApplicationRecord
       else
         scope.select("name, custom_emoji_id, count(*) as count, exists(select 1 from announcement_reactions r where r.account_id = #{account.id} and r.announcement_id = announcement_reactions.announcement_id and r.name = announcement_reactions.name) as me")
       end
-    end.to_a
+    end
 
-    ActiveRecord::Associations::Preloader.new(records: records, associations: :custom_emoji).call
+    ActiveRecord::Associations::Preloader.new.preload(records, :custom_emoji)
     records
   end
 

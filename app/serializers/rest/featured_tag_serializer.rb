@@ -10,9 +10,7 @@ class REST::FeaturedTagSerializer < ActiveModel::Serializer
   end
 
   def url
-    # The path is hardcoded because we have to deal with both local and
-    # remote users, which are different routes
-    account_with_domain_url(object.account, "tagged/#{object.tag.to_param}")
+    short_account_tag_url(object.account, object.tag)
   end
 
   def name

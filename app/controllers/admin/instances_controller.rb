@@ -49,7 +49,7 @@ module Admin
     private
 
     def set_instance
-      @instance = Instance.find(TagManager.instance.normalize_domain(params[:id]&.strip))
+      @instance = Instance.find(params[:id])
     end
 
     def set_instances
@@ -57,7 +57,7 @@ module Admin
     end
 
     def preload_delivery_failures!
-      warning_domains_map = DeliveryFailureTracker.warning_domains_map(@instances.map(&:domain))
+      warning_domains_map = DeliveryFailureTracker.warning_domains_map
 
       @instances.each do |instance|
         instance.failure_days = warning_domains_map[instance.domain]
@@ -65,7 +65,7 @@ module Admin
     end
 
     def filtered_instances
-      InstanceFilter.new(limited_federation_mode? ? { allowed: true } : filter_params).results
+      InstanceFilter.new(whitelist_mode? ? { allowed: true } : filter_params).results
     end
 
     def filter_params

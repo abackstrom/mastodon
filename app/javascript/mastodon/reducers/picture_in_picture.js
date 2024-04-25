@@ -1,5 +1,4 @@
 import { PICTURE_IN_PICTURE_DEPLOY, PICTURE_IN_PICTURE_REMOVE } from 'mastodon/actions/picture_in_picture';
-
 import { TIMELINE_DELETE } from '../actions/timelines';
 
 const initialState = {
@@ -23,4 +22,4 @@ export default function pictureInPicture(state = initialState, action) {
   default:
     return state;
   }
-}
+};
