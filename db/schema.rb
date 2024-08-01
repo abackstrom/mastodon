@@ -978,7 +978,6 @@ ActiveRecord::Schema[7.0].define(version: 2023_09_07_150100) do
     t.bigint "application_id"
     t.bigint "in_reply_to_account_id"
     t.bigint "poll_id"
-    t.datetime "deleted_at"
     t.datetime "deleted_at", precision: nil
     t.datetime "edited_at", precision: nil
     t.boolean "local_only"
