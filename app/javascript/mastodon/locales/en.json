@@ -900,6 +900,7 @@
   "status.show_original": "Show original",
   "status.title.with_attachments": "{user} posted {attachmentCount, plural, one {an attachment} other {{attachmentCount} attachments}}",
   "status.translate": "Translate",
+  "status.translate_from": "Translate from {lang}",
   "status.translated_from_with": "Translated from {lang} using {provider}",
   "status.uncached_media_warning": "Preview not available",
   "status.unmute_conversation": "Unmute conversation",
