@@ -31,10 +31,11 @@ class TranslateButton extends PureComponent {
   static propTypes = {
     translation: ImmutablePropTypes.map,
     onClick: PropTypes.func,
+    statusLanguage: PropTypes.string,
   };
 
   render () {
-    const { translation, onClick } = this.props;
+    const { translation, onClick, statusLanguage } = this.props;
 
     if (translation) {
       const language     = preloadedLanguages.find(lang => lang[0] === translation.get('detected_source_language'));
@@ -51,6 +52,17 @@ class TranslateButton extends PureComponent {
             <FormattedMessage id='status.show_original' defaultMessage='Show original' />
           </button>
         </div>
+      );
+    }
+
+    const language     = preloadedLanguages.find(lang => lang[0] === statusLanguage);
+    const languageName = language ? language[1] : 'Unknown';
+
+    if (languageName) {
+      return (
+        <button className='status__content__translate-button' onClick={onClick}>
+          <FormattedMessage id='status.translate_from' defaultMessage='Translate from {lang}' values={{ lang: languageName }} />
+        </button>
       );
     }
 
@@ -241,7 +253,7 @@ class StatusContent extends PureComponent {
     );
 
     const translateButton = renderTranslate && (
-      <TranslateButton onClick={this.handleTranslate} translation={status.get('translation')} />
+      <TranslateButton onClick={this.handleTranslate} translation={status.get('translation')} statusLanguage={language} />
     );
 
     const poll = !!status.get('poll') && (
